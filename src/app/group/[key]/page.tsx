@@ -1,8 +1,8 @@
 'use client';
 
-import { useState, useMemo } from 'react';
-import { notFound } from 'next/navigation';
-import { MOCK_GROUP, MOCK_GROUP_KEY, CURRENT_USER_ID } from '@/lib/mock-data';
+import { useState, useMemo, useEffect } from 'react';
+import { notFound, useSearchParams } from 'next/navigation';
+import { MOCK_GROUP, MOCK_GROUP_KEY, CURRENT_USER_ID, ALL_USERS } from '@/lib/mock-data';
 import type { Expense, Group } from '@/lib/types';
 import GroupHeader from '@/components/group/GroupHeader';
 import BalanceSummary from '@/components/group/BalanceSummary';
@@ -12,21 +12,69 @@ import AddExpenseDialog from '@/components/group/AddExpenseDialog';
 import { Button } from '@/components/ui/button';
 import { Plus } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { Skeleton } from '@/components/ui/skeleton';
+
+const createNewGroup = (id: string, name: string): Group => {
+  const currentUser = ALL_USERS.find(u => u.id === CURRENT_USER_ID)!;
+  return {
+    id,
+    name,
+    members: [currentUser], // Start with only the current user
+    expenses: [],
+    activityLog: [
+      {
+        id: `act${Date.now()}`,
+        text: `created the group "${name}"`,
+        timestamp: new Date().toISOString(),
+        user: currentUser,
+      },
+    ],
+  };
+};
 
 export default function GroupPage({ params }: { params: { key: string } }) {
   const { toast } = useToast();
-  
-  // In a real app, you would fetch group data based on params.key
-  if (params.key !== MOCK_GROUP_KEY) {
-    notFound();
+  const searchParams = useSearchParams();
+  const [group, setGroup] = useState<Group | null>(null);
+
+  useEffect(() => {
+    const groupName = searchParams.get('name');
+    if (params.key === MOCK_GROUP_KEY) {
+      setGroup(MOCK_GROUP);
+    } else if (params.key.startsWith('NEW-') && groupName) {
+      setGroup(createNewGroup(params.key, groupName));
+    } else {
+      notFound();
+    }
+  }, [params.key, searchParams]);
+
+  const approvedExpenses = useMemo(() => {
+    if (!group) return [];
+    return group.expenses.filter((e) => e.status === 'approved');
+  }, [group]);
+
+  if (!group) {
+    return (
+      <div className="container mx-auto p-4 sm:p-6 lg:p-8">
+        <div className="space-y-4">
+          <Skeleton className="h-12 w-1/2" />
+          <Skeleton className="h-8 w-1/3" />
+        </div>
+        <hr className="my-6"/>
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            <div className="lg:col-span-2 space-y-4">
+                <Skeleton className="h-10 w-full" />
+                <Skeleton className="h-40 w-full" />
+                <Skeleton className="h-40 w-full" />
+            </div>
+            <div className="lg:col-span-1 space-y-8">
+                <Skeleton className="h-64 w-full" />
+                <Skeleton className="h-64 w-full" />
+            </div>
+        </div>
+      </div>
+    );
   }
-
-  const [group, setGroup] = useState<Group>(MOCK_GROUP);
-
-  const approvedExpenses = useMemo(() => 
-    group.expenses.filter((e) => e.status === 'approved'), 
-    [group.expenses]
-  );
   
   const handleAddExpense = (newExpense: Omit<Expense, 'id' | 'timestamp' | 'status' | 'approvals' | 'deletionApprovals'>) => {
     const expense: Expense = {
@@ -40,25 +88,29 @@ export default function GroupPage({ params }: { params: { key: string } }) {
   
     const payer = group.members.find(m => m.id === newExpense.paidById);
     
-    setGroup(prevGroup => ({
-      ...prevGroup,
-      expenses: [expense, ...prevGroup.expenses],
-      activityLog: [
-        {
-          id: `act${Date.now()}`,
-          text: `added expense "${expense.description}" for $${expense.amount.toFixed(2)}`,
-          timestamp: new Date().toISOString(),
-          user: payer!,
-        },
-        ...prevGroup.activityLog
-      ]
-    }));
+    setGroup(prevGroup => {
+      if (!prevGroup) return null;
+      return {
+        ...prevGroup,
+        expenses: [expense, ...prevGroup.expenses],
+        activityLog: [
+          {
+            id: `act${Date.now()}`,
+            text: `added expense "${expense.description}" for $${expense.amount.toFixed(2)}`,
+            timestamp: new Date().toISOString(),
+            user: payer!,
+          },
+          ...prevGroup.activityLog
+        ]
+      }
+    });
 
     toast({ title: 'Expense Added', description: 'Your expense is now pending approval from group members.' });
   };
   
   const handleApproval = (expenseId: string, type: 'expense' | 'deletion') => {
     setGroup(prevGroup => {
+      if (!prevGroup) return null;
       const newExpenses = [...prevGroup.expenses];
       const expenseIndex = newExpenses.findIndex(e => e.id === expenseId);
       if (expenseIndex === -1) return prevGroup;
@@ -68,6 +120,7 @@ export default function GroupPage({ params }: { params: { key: string } }) {
       let newActivityLog = [...prevGroup.activityLog];
 
       if (type === 'expense') {
+        if (expense.approvals.includes(CURRENT_USER_ID)) return prevGroup; // Already approved
         expense.approvals = [...expense.approvals, CURRENT_USER_ID];
         if (expense.approvals.length === prevGroup.members.length) {
           expense.status = 'approved';
@@ -83,6 +136,7 @@ export default function GroupPage({ params }: { params: { key: string } }) {
           ];
         }
       } else { // type === 'deletion'
+        if (expense.deletionApprovals.includes(CURRENT_USER_ID)) return prevGroup; // Already approved
         expense.deletionApprovals = [...expense.deletionApprovals, CURRENT_USER_ID];
         if (expense.deletionApprovals.length === prevGroup.members.length) {
           newExpenses.splice(expenseIndex, 1);
@@ -110,6 +164,7 @@ export default function GroupPage({ params }: { params: { key: string } }) {
 
   const handleDeleteRequest = (expenseId: string) => {
     setGroup(prevGroup => {
+      if (!prevGroup) return null;
       const newExpenses = prevGroup.expenses.map(e => {
         if (e.id === expenseId) {
           return {

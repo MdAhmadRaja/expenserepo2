@@ -33,12 +33,13 @@ export default function Home() {
     e.preventDefault();
     if (groupName.trim()) {
       // In a real app, this would generate a new key and group.
+      const newKey = `NEW-${Date.now()}`;
       // For this prototype, we'll forward to the mock group to show the UI.
       toast({
-        title: 'Group Created (Demo)',
-        description: `You are being redirected to a sample group. Your key is ${MOCK_GROUP_KEY}`,
+        title: 'Group Created!',
+        description: `Your new group "${groupName}" is ready.`,
       });
-      router.push(`/group/${MOCK_GROUP_KEY}`);
+      router.push(`/group/${newKey}?name=${encodeURIComponent(groupName)}`);
     }
   };
 

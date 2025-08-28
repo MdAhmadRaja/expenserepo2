@@ -2,12 +2,14 @@ import type { Group, User } from './types';
 
 export const MOCK_GROUP_KEY = 'TRIP-2024';
 
-const users: User[] = [
+const ALL_USERS: User[] = [
   { id: 'user1', name: 'Alice', avatarUrl: 'https://picsum.photos/seed/user1/100/100' },
   { id: 'user2', name: 'Bob', avatarUrl: 'https://picsum.photos/seed/user2/100/100' },
   { id: 'user3', name: 'Charlie', avatarUrl: 'https://picsum.photos/seed/user3/100/100' },
   { id: 'user4', name: 'Diana', avatarUrl: 'https://picsum.photos/seed/user4/100/100' },
 ];
+
+export { ALL_USERS };
 
 // For simulation purposes, we'll assume the current user is Alice
 export const CURRENT_USER_ID = 'user1';
@@ -15,7 +17,7 @@ export const CURRENT_USER_ID = 'user1';
 export const MOCK_GROUP: Group = {
   id: MOCK_GROUP_KEY,
   name: 'Mountain Cabin Trip',
-  members: users,
+  members: ALL_USERS,
   expenses: [
     {
       id: 'exp1',
@@ -73,31 +75,31 @@ export const MOCK_GROUP: Group = {
       id: 'act5',
       text: 'requested to delete "Dinner at the lodge"',
       timestamp: new Date(Date.now() - 4 * 60 * 60 * 1000).toISOString(),
-      user: users.find(u => u.id === 'user1')!,
+      user: ALL_USERS.find(u => u.id === 'user1')!,
     },
     {
       id: 'act4',
       text: 'added expense "Dinner at the lodge" for $180.00',
       timestamp: new Date(Date.now() - 5 * 60 * 60 * 1000).toISOString(),
-      user: users.find(u => u.id === 'user1')!,
+      user: ALL_USERS.find(u => u.id === 'user1')!,
     },
     {
       id: 'act3',
       text: 'added expense "Firewood" for $60.00',
       timestamp: new Date(Date.now() - 18 * 60 * 60 * 1000).toISOString(),
-      user: users.find(u => u.id === 'user3')!,
+      user: ALL_USERS.find(u => u.id === 'user3')!,
     },
     {
       id: 'act2',
       text: 'added expense "Groceries" for $250.00',
       timestamp: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000).toISOString(),
-      user: users.find(u => u.id === 'user2')!,
+      user: ALL_USERS.find(u => u.id === 'user2')!,
     },
     {
       id: 'act1',
       text: 'created the group "Mountain Cabin Trip"',
       timestamp: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString(),
-      user: users.find(u => u.id === 'user1')!,
+      user: ALL_USERS.find(u => u.id === 'user1')!,
     },
   ],
 };
