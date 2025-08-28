@@ -28,6 +28,7 @@ export const MOCK_GROUP: Group = {
       status: 'approved',
       approvals: ['user1', 'user2', 'user3', 'user4'],
       deletionApprovals: [],
+      splitWith: ['user1', 'user2', 'user3', 'user4'],
     },
     {
       id: 'exp2',
@@ -38,6 +39,7 @@ export const MOCK_GROUP: Group = {
       status: 'approved',
       approvals: ['user1', 'user2', 'user3', 'user4'],
       deletionApprovals: [],
+      splitWith: ['user1', 'user2', 'user3', 'user4'],
     },
     {
       id: 'exp3',
@@ -48,6 +50,7 @@ export const MOCK_GROUP: Group = {
       status: 'pending',
       approvals: ['user3', 'user1'],
       deletionApprovals: [],
+      splitWith: ['user1', 'user2', 'user3', 'user4'],
     },
     {
         id: 'exp4',
@@ -58,6 +61,7 @@ export const MOCK_GROUP: Group = {
         status: 'pending',
         approvals: ['user4'],
         deletionApprovals: [],
+        splitWith: ['user4', 'user1'],
     },
     {
         id: 'exp5',
@@ -68,6 +72,7 @@ export const MOCK_GROUP: Group = {
         status: 'deletion-requested',
         approvals: ['user1', 'user2', 'user3', 'user4'], // Was approved before deletion request
         deletionApprovals: ['user1', 'user2'],
+        splitWith: ['user1', 'user2', 'user3', 'user4'],
     }
   ],
   activityLog: [

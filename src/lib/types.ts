@@ -15,6 +15,7 @@ export type Expense = {
   status: ExpenseStatus;
   approvals: string[]; // array of user IDs who approved
   deletionApprovals: string[]; // array of user IDs who approved deletion
+  splitWith: string[]; // array of user IDs to split with
 };
 
 export type Activity = {

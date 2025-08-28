@@ -18,13 +18,18 @@ export default function BalanceSummary({ expenses, members }: BalanceSummaryProp
 
     if (members.length > 0) {
       expenses.forEach((expense) => {
-        const share = expense.amount / members.length;
-        // The payer gets credited the full amount
-        memberBalances[expense.paidById] += expense.amount;
-        // Everyone's balance is debited their share
-        members.forEach((member) => {
-          memberBalances[member.id] -= share;
-        });
+        const membersInvolved = expense.splitWith || members.map(m => m.id);
+        const splitCount = membersInvolved.length;
+
+        if (splitCount > 0) {
+          const share = expense.amount / splitCount;
+          // The payer gets credited the full amount
+          memberBalances[expense.paidById] += expense.amount;
+          // Only debit the members involved in the split
+          membersInvolved.forEach((memberId) => {
+            memberBalances[memberId] -= share;
+          });
+        }
       });
     }
 

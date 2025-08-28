@@ -118,11 +118,15 @@ export default function GroupPage({ params }: { params: { key: string } }) {
       const expense = { ...newExpenses[expenseIndex] };
       const approver = prevGroup.members.find(m => m.id === CURRENT_USER_ID)!;
       let newActivityLog = [...prevGroup.activityLog];
+      
+      const membersInvolvedInExpense = expense.splitWith || prevGroup.members.map(m => m.id);
+      const requiredApprovals = prevGroup.members.filter(m => membersInvolvedInExpense.includes(m.id)).length;
+
 
       if (type === 'expense') {
         if (expense.approvals.includes(CURRENT_USER_ID)) return prevGroup; // Already approved
         expense.approvals = [...expense.approvals, CURRENT_USER_ID];
-        if (expense.approvals.length === prevGroup.members.length) {
+        if (expense.approvals.length >= requiredApprovals) {
           expense.status = 'approved';
           newActivityLog = [
             { id: `act${Date.now()}`, text: `fully approved expense "${expense.description}"`, timestamp: new Date().toISOString(), user: approver },
@@ -138,7 +142,7 @@ export default function GroupPage({ params }: { params: { key: string } }) {
       } else { // type === 'deletion'
         if (expense.deletionApprovals.includes(CURRENT_USER_ID)) return prevGroup; // Already approved
         expense.deletionApprovals = [...expense.deletionApprovals, CURRENT_USER_ID];
-        if (expense.deletionApprovals.length === prevGroup.members.length) {
+        if (expense.deletionApprovals.length >= requiredApprovals) {
           newExpenses.splice(expenseIndex, 1);
           newActivityLog = [
             { id: `act${Date.now()}`, text: `deleted expense "${expense.description}"`, timestamp: new Date().toISOString(), user: approver },
@@ -154,7 +158,7 @@ export default function GroupPage({ params }: { params: { key: string } }) {
         }
       }
 
-      if (type !== 'deletion' || expense.deletionApprovals.length < prevGroup.members.length) {
+      if (type !== 'deletion' || expense.deletionApprovals.length < requiredApprovals) {
         newExpenses[expenseIndex] = expense;
       }
       

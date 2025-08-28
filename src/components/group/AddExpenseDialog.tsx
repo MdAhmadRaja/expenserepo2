@@ -20,11 +20,14 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import type { User, Expense } from '@/lib/types';
 import { CURRENT_USER_ID } from '@/lib/mock-data';
+import { Checkbox } from '../ui/checkbox';
+import { ScrollArea } from '../ui/scroll-area';
 
 const expenseSchema = z.object({
   description: z.string().min(1, 'Description is required'),
   amount: z.coerce.number().min(0.01, 'Amount must be greater than 0'),
   paidById: z.string().min(1, 'You must select who paid'),
+  splitWith: z.array(z.string()).min(1, 'Select at least one member to split with'),
 });
 
 type AddExpenseForm = z.infer<typeof expenseSchema>;
@@ -42,6 +45,8 @@ export default function AddExpenseDialog({ members, onAddExpense, children }: Ad
     register,
     handleSubmit,
     reset,
+    watch,
+    setValue,
     formState: { errors },
   } = useForm<AddExpenseForm>({
     resolver: zodResolver(expenseSchema),
@@ -49,19 +54,27 @@ export default function AddExpenseDialog({ members, onAddExpense, children }: Ad
       description: '',
       amount: undefined,
       paidById: CURRENT_USER_ID,
+      splitWith: members.map(m => m.id),
     },
   });
 
   const onSubmit = (data: AddExpenseForm) => {
     onAddExpense(data);
-    reset();
+    reset({
+        description: '',
+        amount: undefined,
+        paidById: CURRENT_USER_ID,
+        splitWith: members.map(m => m.id),
+    });
     setOpen(false);
   };
+  
+  const selectedMembers = watch('splitWith') || [];
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>{children}</DialogTrigger>
-      <DialogContent className="sm:max-w-[425px]">
+      <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle className='font-headline'>Add a New Expense</DialogTitle>
           <DialogDescription>
@@ -113,6 +126,35 @@ export default function AddExpenseDialog({ members, onAddExpense, children }: Ad
                 />
                 {errors.paidById && <p className="text-destructive text-sm mt-1">{errors.paidById.message}</p>}
               </div>
+            </div>
+            <div className="grid grid-cols-4 items-start gap-4">
+                <Label className="text-right pt-2">Split with</Label>
+                <div className="col-span-3 space-y-2">
+                    <ScrollArea className="h-24 rounded-md border p-2">
+                        <div className='space-y-2'>
+                        {members.map(member => (
+                            <div key={member.id} className="flex items-center gap-2">
+                                <Checkbox
+                                    id={`split-${member.id}`}
+                                    checked={selectedMembers.includes(member.id)}
+                                    onCheckedChange={(checked) => {
+                                        const currentSplit = selectedMembers;
+                                        if (checked) {
+                                            setValue('splitWith', [...currentSplit, member.id]);
+                                        } else {
+                                            setValue('splitWith', currentSplit.filter(id => id !== member.id));
+                                        }
+                                    }}
+                                />
+                                <Label htmlFor={`split-${member.id}`} className="font-normal flex-1 cursor-pointer">
+                                    {member.name}
+                                </Label>
+                            </div>
+                        ))}
+                        </div>
+                    </ScrollArea>
+                    {errors.splitWith && <p className="text-destructive text-sm mt-1">{errors.splitWith.message}</p>}
+                </div>
             </div>
           </div>
           <DialogFooter>

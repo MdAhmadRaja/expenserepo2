@@ -6,6 +6,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import type { Expense, User } from '@/lib/types';
 import { Check, CheckCircle, Hourglass, ShieldAlert, Trash2 } from 'lucide-react';
 import { format } from 'date-fns';
+import { cn } from '@/lib/utils';
 
 type ExpenseItemProps = {
   expense: Expense;
@@ -17,7 +18,9 @@ type ExpenseItemProps = {
 
 export default function ExpenseItem({ expense, members, currentUserId, onApproval, onDeleteRequest }: ExpenseItemProps) {
   const payer = members.find((m) => m.id === expense.paidById);
-  const totalMembers = members.length;
+  const membersInvolvedInExpense = expense.splitWith || members.map(m => m.id);
+  const totalMembers = membersInvolvedInExpense.length;
+  const involvedMembers = members.filter(m => membersInvolvedInExpense.includes(m.id));
 
   const renderApprovalStatus = () => {
     switch (expense.status) {
@@ -30,14 +33,15 @@ export default function ExpenseItem({ expense, members, currentUserId, onApprova
         );
       case 'pending': {
         const hasApproved = expense.approvals.includes(currentUserId);
+        const requiredApprovals = involvedMembers.length;
         return (
           <div className="w-full">
             <div className="flex items-center gap-2 text-sm text-amber-600 mb-2">
               <Hourglass className="h-4 w-4" />
-              <span>Pending Approval ({expense.approvals.length}/{totalMembers})</span>
+              <span>Pending Approval ({expense.approvals.length}/{requiredApprovals})</span>
             </div>
-            <Progress value={(expense.approvals.length / totalMembers) * 100} className="h-2" />
-            {!hasApproved && (
+            <Progress value={(expense.approvals.length / requiredApprovals) * 100} className="h-2" />
+            {!hasApproved && membersInvolvedInExpense.includes(currentUserId) && (
               <Button size="sm" className="mt-3 w-full" variant="outline" onClick={() => onApproval(expense.id, 'expense')}>
                 <Check className="mr-2 h-4 w-4"/> Approve
               </Button>
@@ -47,14 +51,15 @@ export default function ExpenseItem({ expense, members, currentUserId, onApprova
       }
       case 'deletion-requested': {
         const hasApprovedDeletion = expense.deletionApprovals.includes(currentUserId);
+        const requiredApprovals = involvedMembers.length;
         return (
           <div className="w-full">
             <div className="flex items-center gap-2 text-sm text-red-600 mb-2">
               <ShieldAlert className="h-4 w-4" />
-              <span>Deletion Requested ({expense.deletionApprovals.length}/{totalMembers})</span>
+              <span>Deletion Requested ({expense.deletionApprovals.length}/{requiredApprovals})</span>
             </div>
-            <Progress value={(expense.deletionApprovals.length / totalMembers) * 100} className="h-2 bg-destructive/50 [&>*]:bg-destructive" />
-             {!hasApprovedDeletion && (
+            <Progress value={(expense.deletionApprovals.length / requiredApprovals) * 100} className="h-2 bg-destructive/50 [&>*]:bg-destructive" />
+             {!hasApprovedDeletion && membersInvolvedInExpense.includes(currentUserId) && (
               <Button size="sm" variant="destructive" className="mt-3 w-full" onClick={() => onApproval(expense.id, 'deletion')}>
                  <Trash2 className="mr-2 h-4 w-4"/> Approve Deletion
               </Button>
@@ -68,7 +73,7 @@ export default function ExpenseItem({ expense, members, currentUserId, onApprova
   };
 
   return (
-    <Card className="transition-all hover:shadow-md">
+    <Card className={cn('transition-all hover:shadow-md', expense.status === 'approved' && 'bg-green-50 border-green-200')}>
       <CardHeader className="pb-4">
         <div className="flex justify-between items-start">
           <div>
@@ -83,7 +88,7 @@ export default function ExpenseItem({ expense, members, currentUserId, onApprova
       <CardContent className="flex items-center gap-4">
         <TooltipProvider>
             <div className="flex -space-x-2 overflow-hidden">
-                {members.map(member => {
+                {involvedMembers.map(member => {
                     const iconClass = "h-7 w-7 border-2 border-background";
                     const hasApproved = expense.approvals.includes(member.id);
                     const hasApprovedDeletion = expense.deletionApprovals.includes(member.id);
@@ -117,7 +122,7 @@ export default function ExpenseItem({ expense, members, currentUserId, onApprova
       </CardContent>
       <CardFooter className="flex flex-col items-start gap-4 bg-muted/50 p-4">
         {renderApprovalStatus()}
-        {expense.status !== 'deletion-requested' && (
+        {expense.status !== 'deletion-requested' && expense.paidById === currentUserId && (
           <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-destructive" onClick={() => onDeleteRequest(expense.id)}>
             <Trash2 className="mr-2 h-4 w-4" /> Request Deletion
           </Button>
