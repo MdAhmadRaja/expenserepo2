@@ -37,3 +37,7 @@ export type Balance = {
   userId: string;
   amount: number;
 };
+
+export type LocalStorageGroups = {
+  [key: string]: Group;
+}

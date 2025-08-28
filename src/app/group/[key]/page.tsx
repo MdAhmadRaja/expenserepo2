@@ -3,7 +3,7 @@
 import { useState, useMemo, useEffect } from 'react';
 import { notFound, useSearchParams } from 'next/navigation';
 import { MOCK_GROUP, MOCK_GROUP_KEY, CURRENT_USER_ID, ALL_USERS } from '@/lib/mock-data';
-import type { Expense, Group } from '@/lib/types';
+import type { Expense, Group, LocalStorageGroups, User } from '@/lib/types';
 import GroupHeader from '@/components/group/GroupHeader';
 import MemberSummary from '@/components/group/MemberSummary';
 import BalanceSummary from '@/components/group/BalanceSummary';
@@ -15,12 +15,14 @@ import { Plus } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { Skeleton } from '@/components/ui/skeleton';
 
+const STORAGE_KEY = 'expenseKeyGroups';
+
 const createNewGroup = (id: string, name: string): Group => {
   const currentUser = ALL_USERS.find(u => u.id === CURRENT_USER_ID)!;
   return {
     id,
     name,
-    members: [currentUser], // Start with only the current user
+    members: [currentUser],
     expenses: [],
     activityLog: [],
   };
@@ -30,24 +32,59 @@ export default function GroupPage({ params }: { params: { key: string } }) {
   const { toast } = useToast();
   const searchParams = useSearchParams();
   const [group, setGroup] = useState<Group | null>(null);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const groupName = searchParams.get('name');
-    if (params.key === MOCK_GROUP_KEY) {
-      setGroup(MOCK_GROUP);
-    } else if (params.key.startsWith('NEW-') && groupName) {
-      setGroup(createNewGroup(params.key, groupName));
+    let initialGroup: Group | null = null;
+    
+    try {
+      const storedGroupsRaw = localStorage.getItem(STORAGE_KEY);
+      const storedGroups: LocalStorageGroups = storedGroupsRaw ? JSON.parse(storedGroupsRaw) : {};
+      
+      if (storedGroups[params.key]) {
+        initialGroup = storedGroups[params.key];
+      } else if (params.key === MOCK_GROUP_KEY) {
+        initialGroup = MOCK_GROUP;
+      } else if (params.key.startsWith('NEW-') && groupName) {
+        initialGroup = createNewGroup(params.key, groupName);
+      }
+    } catch (error) {
+      console.error("Failed to read from localStorage", error);
+      if (params.key === MOCK_GROUP_KEY) {
+        initialGroup = MOCK_GROUP;
+      } else if (params.key.startsWith('NEW-') && groupName) {
+        initialGroup = createNewGroup(params.key, groupName);
+      }
+    }
+
+    if (initialGroup) {
+      setGroup(initialGroup);
     } else {
       notFound();
     }
+    setLoading(false);
   }, [params.key, searchParams]);
+  
+  useEffect(() => {
+    if (group && !loading) {
+      try {
+        const storedGroupsRaw = localStorage.getItem(STORAGE_KEY);
+        const storedGroups: LocalStorageGroups = storedGroupsRaw ? JSON.parse(storedGroupsRaw) : {};
+        storedGroups[group.id] = group;
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(storedGroups));
+      } catch (error) {
+        console.error("Failed to write to localStorage", error);
+      }
+    }
+  }, [group, loading]);
 
   const approvedExpenses = useMemo(() => {
     if (!group) return [];
     return group.expenses.filter((e) => e.status === 'approved');
   }, [group]);
 
-  if (!group) {
+  if (loading || !group) {
     return (
       <div className="container mx-auto p-4 sm:p-6 lg:p-8">
         <div className="space-y-4">
@@ -118,7 +155,7 @@ export default function GroupPage({ params }: { params: { key: string } }) {
 
 
       if (type === 'expense') {
-        if (expense.approvals.includes(CURRENT_USER_ID)) return prevGroup; // Already approved
+        if (expense.approvals.includes(CURRENT_USER_ID)) return prevGroup;
         expense.approvals = [...expense.approvals, CURRENT_USER_ID];
         if (expense.approvals.length >= requiredApprovals) {
           expense.status = 'approved';
@@ -133,8 +170,8 @@ export default function GroupPage({ params }: { params: { key: string } }) {
             ...newActivityLog
           ];
         }
-      } else { // type === 'deletion'
-        if (expense.deletionApprovals.includes(CURRENT_USER_ID)) return prevGroup; // Already approved
+      } else {
+        if (expense.deletionApprovals.includes(CURRENT_USER_ID)) return prevGroup;
         expense.deletionApprovals = [...expense.deletionApprovals, CURRENT_USER_ID];
         if (expense.deletionApprovals.length >= requiredApprovals) {
           newExpenses.splice(expenseIndex, 1);
@@ -191,7 +228,27 @@ export default function GroupPage({ params }: { params: { key: string } }) {
       }
     });
     toast({ title: 'Deletion Requested', description: 'Other members must approve the deletion.' });
-  }
+  };
+
+  const handleUserUpdate = (updatedUser: User) => {
+    setGroup(prevGroup => {
+      if (!prevGroup) return null;
+
+      const updatedMembers = prevGroup.members.map(m => m.id === updatedUser.id ? updatedUser : m);
+      
+      const updatedActivityLog = prevGroup.activityLog.map(act => ({
+        ...act,
+        user: act.user.id === updatedUser.id ? updatedUser : act.user,
+      }));
+
+      return {
+        ...prevGroup,
+        members: updatedMembers,
+        activityLog: updatedActivityLog
+      };
+    });
+    toast({ title: 'Profile Updated', description: 'Your information has been saved.' });
+  };
 
   return (
     <div className="min-h-screen bg-background">
@@ -199,7 +256,7 @@ export default function GroupPage({ params }: { params: { key: string } }) {
         <GroupHeader group={group} />
         
         <div className="my-8">
-          <MemberSummary expenses={approvedExpenses} members={group.members} />
+          <MemberSummary expenses={approvedExpenses} members={group.members} onUserUpdate={handleUserUpdate} />
         </div>
 
         <div className="mt-8 grid grid-cols-1 lg:grid-cols-3 lg:gap-8">

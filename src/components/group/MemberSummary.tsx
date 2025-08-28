@@ -1,16 +1,20 @@
 'use client';
 
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import type { Expense, User } from '@/lib/types';
 import { Card } from '@/components/ui/card';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Separator } from '@/components/ui/separator';
-import { ArrowDownCircle, ArrowUpCircle } from 'lucide-react';
+import { ArrowDownCircle, ArrowUpCircle, Edit } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../ui/tooltip';
+import EditProfileDialog from './EditProfileDialog';
+import { CURRENT_USER_ID } from '@/lib/mock-data';
+import { Button } from '../ui/button';
 
 type MemberSummaryProps = {
   expenses: Expense[];
   members: User[];
+  onUserUpdate: (updatedUser: User) => void;
 };
 
 type MemberStats = {
@@ -19,7 +23,9 @@ type MemberStats = {
   balance: number;
 };
 
-export default function MemberSummary({ expenses, members }: MemberSummaryProps) {
+export default function MemberSummary({ expenses, members, onUserUpdate }: MemberSummaryProps) {
+  const [editingUser, setEditingUser] = useState<User | null>(null);
+
   const memberStats = useMemo(() => {
     const stats: Record<string, MemberStats> = {};
 
@@ -28,14 +34,12 @@ export default function MemberSummary({ expenses, members }: MemberSummaryProps)
     });
 
     expenses.forEach((expense) => {
-      // Add to total paid for the payer
       if (stats[expense.paidById]) {
         stats[expense.paidById].totalPaid += expense.amount;
       }
 
-      // Add to total share for each member involved
       const membersInvolved = expense.splitWith || members.map(m => m.id);
-      const share = expense.amount / membersInvolved.length;
+      const share = expense.amount / (membersInvolved.length || 1);
       membersInvolved.forEach((memberId) => {
         if (stats[memberId]) {
           stats[memberId].totalShare += share;
@@ -43,7 +47,6 @@ export default function MemberSummary({ expenses, members }: MemberSummaryProps)
       });
     });
 
-    // Calculate final balance
     members.forEach((member) => {
       if (stats[member.id]) {
         stats[member.id].balance = stats[member.id].totalPaid - stats[member.id].totalShare;
@@ -55,6 +58,16 @@ export default function MemberSummary({ expenses, members }: MemberSummaryProps)
   
   if (members.length === 0) return null;
 
+  const handleEdit = (user: User) => {
+    if (user.id === CURRENT_USER_ID) {
+      setEditingUser(user);
+    }
+  };
+
+  const handleSaveProfile = (updatedUser: User) => {
+    onUserUpdate(updatedUser);
+  };
+
   return (
     <Card className="p-4 md:p-6">
        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
@@ -62,13 +75,26 @@ export default function MemberSummary({ expenses, members }: MemberSummaryProps)
           const stats = memberStats[member.id] || { totalPaid: 0, totalShare: 0, balance: 0 };
           const isOwed = stats.balance > 0;
           const isSettled = Math.abs(stats.balance) < 0.01;
+          const isCurrentUser = member.id === CURRENT_USER_ID;
           
           return (
             <div key={member.id} className="relative flex flex-col items-center text-center">
-              <Avatar className="h-16 w-16 border-2">
-                <AvatarImage src={member.avatarUrl} alt={member.name} data-ai-hint="person portrait" />
-                <AvatarFallback>{member.name.charAt(0)}</AvatarFallback>
-              </Avatar>
+              <div className="relative">
+                <Avatar className="h-16 w-16 border-2">
+                  <AvatarImage src={member.avatarUrl} alt={member.name} data-ai-hint="person portrait" />
+                  <AvatarFallback>{member.name.charAt(0)}</AvatarFallback>
+                </Avatar>
+                {isCurrentUser && (
+                  <Button
+                    size="icon"
+                    variant="outline"
+                    className="absolute -bottom-2 -right-2 h-7 w-7 rounded-full bg-background hover:bg-accent"
+                    onClick={() => handleEdit(member)}
+                  >
+                    <Edit className="h-4 w-4" />
+                  </Button>
+                )}
+              </div>
               <h3 className="mt-2 text-md font-bold text-foreground">{member.name}</h3>
               <div
                 className={`mt-1 font-semibold text-xl ${
@@ -114,6 +140,13 @@ export default function MemberSummary({ expenses, members }: MemberSummaryProps)
           );
         })}
        </div>
+       {editingUser && (
+        <EditProfileDialog
+          user={editingUser}
+          onSave={handleSaveProfile}
+          onOpenChange={(open) => !open && setEditingUser(null)}
+        />
+      )}
     </Card>
   );
 }
