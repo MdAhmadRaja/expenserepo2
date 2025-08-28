@@ -5,6 +5,7 @@ import { notFound, useSearchParams } from 'next/navigation';
 import { MOCK_GROUP, MOCK_GROUP_KEY, CURRENT_USER_ID, ALL_USERS } from '@/lib/mock-data';
 import type { Expense, Group } from '@/lib/types';
 import GroupHeader from '@/components/group/GroupHeader';
+import MemberSummary from '@/components/group/MemberSummary';
 import BalanceSummary from '@/components/group/BalanceSummary';
 import ExpenseList from '@/components/group/ExpenseList';
 import ActivityLog from '@/components/group/ActivityLog';
@@ -21,14 +22,7 @@ const createNewGroup = (id: string, name: string): Group => {
     name,
     members: [currentUser], // Start with only the current user
     expenses: [],
-    activityLog: [
-      {
-        id: `act${Date.now()}`,
-        text: `created the group "${name}"`,
-        timestamp: new Date().toISOString(),
-        user: currentUser,
-      },
-    ],
+    activityLog: [],
   };
 };
 
@@ -203,6 +197,10 @@ export default function GroupPage({ params }: { params: { key: string } }) {
     <div className="min-h-screen bg-background">
       <div className="container mx-auto p-4 sm:p-6 lg:p-8">
         <GroupHeader group={group} />
+        
+        <div className="my-8">
+          <MemberSummary expenses={approvedExpenses} members={group.members} />
+        </div>
 
         <div className="mt-8 grid grid-cols-1 lg:grid-cols-3 lg:gap-8">
           <main className="lg:col-span-2">
