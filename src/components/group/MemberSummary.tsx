@@ -1,20 +1,23 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import type { Expense, User } from '@/lib/types';
+import type { User } from '@/lib/types';
 import { Card } from '@/components/ui/card';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Separator } from '@/components/ui/separator';
-import { ArrowDownCircle, ArrowUpCircle, Edit } from 'lucide-react';
+import { ArrowDownCircle, ArrowUpCircle, Edit, Check, Hourglass, UserCheck } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../ui/tooltip';
 import EditProfileDialog from './EditProfileDialog';
 import { CURRENT_USER_ID } from '@/lib/mock-data';
 import { Button } from '../ui/button';
+import { Progress } from '../ui/progress';
 
 type MemberSummaryProps = {
-  expenses: Expense[];
+  expenses: { amount: number; paidById: string; splitWith?: string[] }[];
   members: User[];
   onUserUpdate: (updatedUser: User) => void;
+  onApproveMember: (memberId: string) => void;
+  currentUserId: string;
 };
 
 type MemberStats = {
@@ -23,13 +26,16 @@ type MemberStats = {
   balance: number;
 };
 
-export default function MemberSummary({ expenses, members, onUserUpdate }: MemberSummaryProps) {
+export default function MemberSummary({ expenses, members, onUserUpdate, onApproveMember, currentUserId }: MemberSummaryProps) {
   const [editingUser, setEditingUser] = useState<User | null>(null);
+
+  const approvedMembers = useMemo(() => members.filter(m => m.status !== 'pending'), [members]);
 
   const memberStats = useMemo(() => {
     const stats: Record<string, MemberStats> = {};
+    const activeMembers = members.filter(m => m.status !== 'pending');
 
-    members.forEach((member) => {
+    activeMembers.forEach((member) => {
       stats[member.id] = { totalPaid: 0, totalShare: 0, balance: 0 };
     });
 
@@ -38,8 +44,9 @@ export default function MemberSummary({ expenses, members, onUserUpdate }: Membe
         stats[expense.paidById].totalPaid += expense.amount;
       }
 
-      const membersInvolved = expense.splitWith || members.map(m => m.id);
+      const membersInvolved = expense.splitWith || activeMembers.map(m => m.id);
       const share = expense.amount / (membersInvolved.length || 1);
+      
       membersInvolved.forEach((memberId) => {
         if (stats[memberId]) {
           stats[memberId].totalShare += share;
@@ -47,7 +54,7 @@ export default function MemberSummary({ expenses, members, onUserUpdate }: Membe
       });
     });
 
-    members.forEach((member) => {
+    activeMembers.forEach((member) => {
       if (stats[member.id]) {
         stats[member.id].balance = stats[member.id].totalPaid - stats[member.id].totalShare;
       }
@@ -59,7 +66,7 @@ export default function MemberSummary({ expenses, members, onUserUpdate }: Membe
   if (members.length === 0) return null;
 
   const handleEdit = (user: User) => {
-    if (user.id === CURRENT_USER_ID) {
+    if (user.id === currentUserId) {
       setEditingUser(user);
     }
   };
@@ -67,6 +74,8 @@ export default function MemberSummary({ expenses, members, onUserUpdate }: Membe
   const handleSaveProfile = (updatedUser: User) => {
     onUserUpdate(updatedUser);
   };
+  
+  const totalApprovedMembers = approvedMembers.length;
 
   return (
     <Card className="p-4 md:p-6">
@@ -75,7 +84,33 @@ export default function MemberSummary({ expenses, members, onUserUpdate }: Membe
           const stats = memberStats[member.id] || { totalPaid: 0, totalShare: 0, balance: 0 };
           const isOwed = stats.balance > 0;
           const isSettled = Math.abs(stats.balance) < 0.01;
-          const isCurrentUser = member.id === CURRENT_USER_ID;
+          const isCurrentUser = member.id === currentUserId;
+          const isPending = member.status === 'pending';
+          const currentUserApproved = member.approvals?.includes(currentUserId);
+          
+          if (isPending) {
+            return (
+              <div key={member.id} className="relative flex flex-col items-center text-center bg-muted/50 p-4 rounded-lg">
+                <Avatar className="h-16 w-16 border-2 opacity-50">
+                  <AvatarImage src={member.avatarUrl} alt={member.name} data-ai-hint="person portrait" />
+                  <AvatarFallback>{member.name.charAt(0)}</AvatarFallback>
+                </Avatar>
+                <h3 className="mt-2 text-md font-bold text-muted-foreground">{member.name}</h3>
+                <div className="mt-1 font-semibold text-sm text-amber-600 flex items-center gap-1">
+                  <Hourglass className="h-4 w-4" /> Pending Approval
+                </div>
+                <div className="text-xs text-muted-foreground mt-1">
+                   ({member.approvals?.length || 0}/{totalApprovedMembers} approved)
+                </div>
+                <Progress value={((member.approvals?.length || 0) / totalApprovedMembers) * 100} className="h-1 mt-2 w-full" />
+                {!currentUserApproved && (
+                  <Button size="sm" variant="outline" className="mt-3" onClick={() => onApproveMember(member.id)}>
+                    <UserCheck className="mr-2 h-4 w-4" /> Approve
+                  </Button>
+                )}
+              </div>
+            )
+          }
           
           return (
             <div key={member.id} className="relative flex flex-col items-center text-center">

@@ -1,7 +1,7 @@
 
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useRef } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -21,7 +21,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
 
 const profileSchema = z.object({
   name: z.string().min(1, 'Name is required'),
-  avatarUrl: z.string().url('Please enter a valid URL for the avatar'),
+  avatarUrl: z.string().url('Please enter a valid URL for the avatar').or(z.literal('')),
 });
 
 type ProfileForm = z.infer<typeof profileSchema>;
@@ -37,6 +37,7 @@ export default function EditProfileDialog({ user, onSave, onOpenChange }: EditPr
     register,
     handleSubmit,
     watch,
+    setValue,
     formState: { errors },
   } = useForm<ProfileForm>({
     resolver: zodResolver(profileSchema),
@@ -47,10 +48,22 @@ export default function EditProfileDialog({ user, onSave, onOpenChange }: EditPr
   });
 
   const avatarUrl = watch('avatarUrl');
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const onSubmit = (data: ProfileForm) => {
     onSave({ ...user, ...data });
     onOpenChange(false);
+  };
+  
+  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setValue('avatarUrl', reader.result as string);
+      };
+      reader.readAsDataURL(file);
+    }
   };
 
   return (
@@ -64,11 +77,21 @@ export default function EditProfileDialog({ user, onSave, onOpenChange }: EditPr
         </DialogHeader>
         <form onSubmit={handleSubmit(onSubmit)}>
           <div className="grid gap-4 py-4">
-            <div className="flex justify-center">
+            <div className="flex flex-col items-center gap-4">
               <Avatar className="h-24 w-24 border-2">
                 <AvatarImage src={avatarUrl} alt={watch('name')} data-ai-hint="person portrait" />
                 <AvatarFallback>{watch('name')?.charAt(0) || '?'}</AvatarFallback>
               </Avatar>
+              <Button type="button" variant="outline" onClick={() => fileInputRef.current?.click()}>
+                Upload Image
+              </Button>
+              <input
+                type="file"
+                ref={fileInputRef}
+                className="hidden"
+                accept="image/*"
+                onChange={handleFileChange}
+              />
             </div>
             <div className="space-y-2">
               <Label htmlFor="name">Name</Label>

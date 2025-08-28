@@ -5,7 +5,8 @@ import { Input } from '@/components/ui/input';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { useToast } from '@/hooks/use-toast';
 import type { Group } from '@/lib/types';
-import { Check, Copy, Users } from 'lucide-react';
+import { Check, Copy, Users, Home } from 'lucide-react';
+import Link from 'next/link';
 import { useState } from 'react';
 
 type GroupHeaderProps = {
@@ -17,28 +18,37 @@ export default function GroupHeader({ group }: GroupHeaderProps) {
   const [copied, setCopied] = useState(false);
 
   const handleCopy = () => {
-    navigator.clipboard.writeText(group.id);
+    const joinUrl = `${window.location.origin}/group/${group.id}?join=true`;
+    navigator.clipboard.writeText(joinUrl);
     setCopied(true);
-    toast({ title: 'Copied!', description: 'Group key copied to clipboard.' });
+    toast({ title: 'Copied!', description: 'Group join link copied to clipboard.' });
     setTimeout(() => setCopied(false), 2000);
   };
 
   return (
     <header className="space-y-6">
-      <div>
-        <h1 className="font-headline text-4xl md:text-5xl font-bold tracking-tighter text-foreground">{group.name}</h1>
-        <p className="text-lg text-muted-foreground mt-1">Manage your shared expenses below.</p>
+      <div className="flex justify-between items-start">
+        <div>
+            <h1 className="font-headline text-4xl md:text-5xl font-bold tracking-tighter text-foreground">{group.name}</h1>
+            <p className="text-lg text-muted-foreground mt-1">Manage your shared expenses below.</p>
+        </div>
+        <Link href="/" passHref>
+            <Button variant="outline" size="icon" aria-label="Go to home page">
+                <Home className="h-5 w-5" />
+            </Button>
+        </Link>
       </div>
+
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div className="space-y-2">
             <label className="text-sm font-medium text-muted-foreground flex items-center gap-2">
                 <Copy className="h-4 w-4" />
-                Shareable Group Key
+                Shareable Group Link
             </label>
             <div className="flex items-center gap-2">
-                <Input type="text" value={group.id} readOnly className="font-mono" />
-                <Button variant="outline" size="icon" onClick={handleCopy} aria-label="Copy group key">
+                <Input type="text" value={`${group.id}`} readOnly className="font-mono" />
+                <Button variant="outline" size="icon" onClick={handleCopy} aria-label="Copy group link">
                     {copied ? <Check className="h-4 w-4 text-green-500" /> : <Copy className="h-4 w-4" />}
                 </Button>
             </div>

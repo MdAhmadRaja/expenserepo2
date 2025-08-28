@@ -9,6 +9,7 @@ import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
 import { MOCK_GROUP_KEY } from '@/lib/mock-data';
 import { KeyRound, Users } from 'lucide-react';
+import type { LocalStorageGroups } from '@/lib/types';
 
 export default function Home() {
   const router = useRouter();
@@ -18,8 +19,17 @@ export default function Home() {
 
   const handleJoinGroup = (e: React.FormEvent) => {
     e.preventDefault();
-    if (joinKey === MOCK_GROUP_KEY) {
-      router.push(`/group/${joinKey}`);
+    let groupExists = false;
+    try {
+      const storedGroupsRaw = localStorage.getItem('expenseKeyGroups');
+      const storedGroups: LocalStorageGroups = storedGroupsRaw ? JSON.parse(storedGroupsRaw) : {};
+      groupExists = !!storedGroups[joinKey] || joinKey === MOCK_GROUP_KEY;
+    } catch {
+       groupExists = joinKey === MOCK_GROUP_KEY;
+    }
+
+    if (groupExists) {
+      router.push(`/group/${joinKey}?join=true`);
     } else {
       toast({
         variant: 'destructive',
@@ -32,9 +42,7 @@ export default function Home() {
   const handleCreateGroup = (e: React.FormEvent) => {
     e.preventDefault();
     if (groupName.trim()) {
-      // In a real app, this would generate a new key and group.
       const newKey = `NEW-${Date.now()}`;
-      // For this prototype, we'll forward to the mock group to show the UI.
       toast({
         title: 'Group Created!',
         description: `Your new group "${groupName}" is ready.`,

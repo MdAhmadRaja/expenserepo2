@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import { notFound, useSearchParams } from 'next/navigation';
 import { MOCK_GROUP, MOCK_GROUP_KEY, CURRENT_USER_ID, ALL_USERS } from '@/lib/mock-data';
 import type { Expense, Group, LocalStorageGroups, User } from '@/lib/types';
@@ -11,9 +11,19 @@ import ExpenseList from '@/components/group/ExpenseList';
 import ActivityLog from '@/components/group/ActivityLog';
 import AddExpenseDialog from '@/components/group/AddExpenseDialog';
 import { Button } from '@/components/ui/button';
-import { Plus } from 'lucide-react';
+import { Plus, UserPlus } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { Skeleton } from '@/components/ui/skeleton';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 
 const STORAGE_KEY = 'expenseKeyGroups';
 
@@ -33,9 +43,12 @@ export default function GroupPage({ params }: { params: { key: string } }) {
   const searchParams = useSearchParams();
   const [group, setGroup] = useState<Group | null>(null);
   const [loading, setLoading] = useState(true);
-
+  const [showAddMemberDialog, setShowAddMemberDialog] = useState(false);
+  const [newMemberName, setNewMemberName] = useState('');
+  
   useEffect(() => {
     const groupName = searchParams.get('name');
+    const isJoining = searchParams.get('join') === 'true';
     let initialGroup: Group | null = null;
     
     try {
@@ -49,6 +62,20 @@ export default function GroupPage({ params }: { params: { key: string } }) {
       } else if (params.key.startsWith('NEW-') && groupName) {
         initialGroup = createNewGroup(params.key, groupName);
       }
+      
+      if (isJoining && initialGroup && !initialGroup.members.some(m => m.id === CURRENT_USER_ID)) {
+        const currentUser = ALL_USERS.find(u => u.id === CURRENT_USER_ID)!;
+        const newUser: User = { ...currentUser, status: 'pending', approvals: [CURRENT_USER_ID] };
+        initialGroup.members.push(newUser);
+        initialGroup.activityLog.unshift({
+          id: `act-join-${Date.now()}`,
+          text: `requested to join the group`,
+          timestamp: new Date().toISOString(),
+          user: newUser,
+        });
+         toast({ title: 'Request Sent', description: 'Your request to join has been sent for approval.' });
+      }
+
     } catch (error) {
       console.error("Failed to read from localStorage", error);
       if (params.key === MOCK_GROUP_KEY) {
@@ -64,7 +91,7 @@ export default function GroupPage({ params }: { params: { key: string } }) {
       notFound();
     }
     setLoading(false);
-  }, [params.key, searchParams]);
+  }, [params.key, searchParams, toast]);
   
   useEffect(() => {
     if (group && !loading) {
@@ -81,7 +108,13 @@ export default function GroupPage({ params }: { params: { key: string } }) {
 
   const approvedExpenses = useMemo(() => {
     if (!group) return [];
-    return group.expenses.filter((e) => e.status === 'approved');
+    const approvedMemberIds = group.members.filter(m => m.status !== 'pending').map(m => m.id);
+    return group.expenses.filter((e) => e.status === 'approved' && approvedMemberIds.includes(e.paidById));
+  }, [group]);
+
+  const approvedMembers = useMemo(() => {
+    if (!group) return [];
+    return group.members.filter(member => member.status !== 'pending');
   }, [group]);
 
   if (loading || !group) {
@@ -150,8 +183,8 @@ export default function GroupPage({ params }: { params: { key: string } }) {
       const approver = prevGroup.members.find(m => m.id === CURRENT_USER_ID)!;
       let newActivityLog = [...prevGroup.activityLog];
       
-      const membersInvolvedInExpense = expense.splitWith || prevGroup.members.map(m => m.id);
-      const requiredApprovals = prevGroup.members.filter(m => membersInvolvedInExpense.includes(m.id)).length;
+      const membersInvolvedInExpense = expense.splitWith || approvedMembers.map(m => m.id);
+      const requiredApprovals = approvedMembers.filter(m => membersInvolvedInExpense.includes(m.id)).length;
 
 
       if (type === 'expense') {
@@ -249,6 +282,64 @@ export default function GroupPage({ params }: { params: { key: string } }) {
     });
     toast({ title: 'Profile Updated', description: 'Your information has been saved.' });
   };
+  
+  const handleApproveMember = (memberId: string) => {
+    setGroup(prevGroup => {
+        if (!prevGroup) return null;
+        const members = [...prevGroup.members];
+        const memberIndex = members.findIndex(m => m.id === memberId);
+        if (memberIndex === -1) return prevGroup;
+
+        const member = { ...members[memberIndex] };
+        if (!member.approvals?.includes(CURRENT_USER_ID)) {
+            member.approvals = [...(member.approvals || []), CURRENT_USER_ID];
+        }
+
+        const requiredApprovals = prevGroup.members.filter(m => m.status !== 'pending').length;
+        if ((member.approvals?.length || 0) >= requiredApprovals) {
+            member.status = 'active';
+            toast({ title: "Member Approved!", description: `${member.name} is now part of the group.` });
+        }
+        
+        members[memberIndex] = member;
+        return { ...prevGroup, members };
+    });
+  };
+  
+  const handleAddMember = () => {
+    if (!newMemberName.trim() || !group) return;
+
+    const newMemberId = `user${Date.now()}`;
+    const newMember: User = {
+      id: newMemberId,
+      name: newMemberName,
+      avatarUrl: `https://picsum.photos/seed/${newMemberId}/100/100`,
+      status: 'pending',
+      approvals: [CURRENT_USER_ID],
+    };
+
+    setGroup(prevGroup => {
+        if (!prevGroup) return null;
+        return {
+            ...prevGroup,
+            members: [...prevGroup.members, newMember],
+            activityLog: [
+                {
+                    id: `act-add-${Date.now()}`,
+                    text: `invited ${newMemberName} to join the group`,
+                    timestamp: new Date().toISOString(),
+                    user: prevGroup.members.find(m => m.id === CURRENT_USER_ID)!,
+                },
+                ...prevGroup.activityLog
+            ]
+        }
+    });
+
+    toast({ title: 'Invitation Sent', description: `${newMemberName} needs to be approved by other members.` });
+    setNewMemberName('');
+    setShowAddMemberDialog(false);
+};
+
 
   return (
     <div className="min-h-screen bg-background">
@@ -256,19 +347,31 @@ export default function GroupPage({ params }: { params: { key: string } }) {
         <GroupHeader group={group} />
         
         <div className="my-8">
-          <MemberSummary expenses={approvedExpenses} members={group.members} onUserUpdate={handleUserUpdate} />
+          <MemberSummary
+            expenses={approvedExpenses}
+            members={group.members}
+            onUserUpdate={handleUserUpdate}
+            onApproveMember={handleApproveMember}
+            currentUserId={CURRENT_USER_ID}
+          />
         </div>
 
         <div className="mt-8 grid grid-cols-1 lg:grid-cols-3 lg:gap-8">
           <main className="lg:col-span-2">
             <div className="flex justify-between items-center mb-6">
               <h2 className="font-headline text-3xl font-bold tracking-tight">Expenses</h2>
-              <AddExpenseDialog members={group.members} onAddExpense={handleAddExpense}>
-                <Button>
-                  <Plus className="-ml-1 mr-2 h-5 w-5" />
-                  Add Expense
+              <div className="flex gap-2">
+                <AddExpenseDialog members={approvedMembers} onAddExpense={handleAddExpense}>
+                  <Button>
+                    <Plus className="-ml-1 mr-2 h-5 w-5" />
+                    Add Expense
+                  </Button>
+                </AddExpenseDialog>
+                <Button variant="outline" onClick={() => setShowAddMemberDialog(true)}>
+                    <UserPlus className="-ml-1 mr-2 h-5 w-5" />
+                    Add Member
                 </Button>
-              </AddExpenseDialog>
+              </div>
             </div>
             <ExpenseList 
               expenses={group.expenses} 
@@ -280,11 +383,32 @@ export default function GroupPage({ params }: { params: { key: string } }) {
           </main>
 
           <aside className="mt-8 lg:mt-0 lg:col-span-1 space-y-8">
-            <BalanceSummary expenses={approvedExpenses} members={group.members} />
+            <BalanceSummary expenses={approvedExpenses} members={approvedMembers} />
             <ActivityLog activities={group.activityLog} members={group.members} />
           </aside>
         </div>
       </div>
+       <AlertDialog open={showAddMemberDialog} onOpenChange={setShowAddMemberDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Add a New Member</AlertDialogTitle>
+            <AlertDialogDescription>
+              Enter the name of the new member. They will need to be approved by the existing members.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <input
+            type="text"
+            placeholder="New member's name"
+            className="p-2 border rounded"
+            value={newMemberName}
+            onChange={(e) => setNewMemberName(e.target.value)}
+          />
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleAddMember}>Add Member</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

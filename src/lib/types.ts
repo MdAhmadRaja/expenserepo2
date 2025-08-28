@@ -2,6 +2,8 @@ export type User = {
   id: string;
   name: string;
   avatarUrl: string;
+  status?: 'pending' | 'active';
+  approvals?: string[]; // user IDs who approved this member
 };
 
 export type ExpenseStatus = 'pending' | 'approved' | 'deletion-requested';
